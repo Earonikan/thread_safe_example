@@ -1,0 +1,9 @@
+# Build files
+/build/
+
+# IDE settings
+.vscode/
+*.code-workspace
+
+# executable
+thread_safe_queue
