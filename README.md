@@ -1,0 +1,1 @@
+Just a simple example of thread safe queue with blocking synchronization using mutex
