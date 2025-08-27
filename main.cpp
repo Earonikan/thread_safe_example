@@ -1,7 +1,9 @@
-#include "src/core/printer.hpp"
-#include "src/core/ts_queue_mutex.hpp"
-#include "src/core/task.hpp"
-#include "src/core/worker.hpp"
+#include "libs/utils/include/printer.hpp"
+#include "include/core/task.hpp"
+#include "include/core/worker.hpp"
+
+#include "libs/ts_queue/ts_blocking_queue.hpp"
+// #include "src/core/ts_mpmc_queue.hpp"
 
 #include <iostream>
 #include <thread>
@@ -9,12 +11,12 @@
 #include <random>
 #include <optional>
 
-#include <boost/lockfree/queue.hpp>
+// #include <boost/lockfree/queue.hpp>
 
 namespace ts_queue {
 
 void test_task() {
-    auto task = std::make_shared<Task>();
+    auto task = std::make_shared<Task>("Greeting");
     auto printer = std::make_shared<Printer>();
 
     printer->SetMessage("Hello Gregory");
@@ -27,24 +29,34 @@ void test_task() {
 
 void test_Worker() {
 
-    ts_queue_mutex<Task> queue;
+    // class Producer : public Worker {
 
-    Task calculation_task("Calculation");
-    calculation_task.SetCallback<void>([]() {
-        long int N = 1000000000;
-        int counter{0};
-        for (auto i{0}; i < N; ++i) {
-            // std::cout << "Incrementing cnt " <<  counter++ << std::endl;
-            counter++;
-        }
+    // public:
+    //     Producer();
+    // };
+
+    TS_BlockingQueue<Task> queue;
+
+    Task calculation_task("Generate Random Number");
+    calculation_task.SetCallback<void>([&]() {
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<> workload_dist(50, 200);
+        int workload = workload_dist(gen);
+        std::cout << workload << std::endl;
+        // Simulate time between task generation
+        std::this_thread::sleep_for(std::chrono::milliseconds(workload));
     });
+
+    // calculation_task.Invoke();
 
     Task push_task("Pushing to queue");
     push_task.SetCallback<void>([&]() {
         queue.push(calculation_task);
+
     });
 
-    Task pop_task("Poping from queue");
+    Task pop_task("Poping from queue and process");
     pop_task.SetCallback<void>([&]() {
         Task task;
         while (!queue.empty()) {
@@ -54,18 +66,18 @@ void test_Worker() {
     });
 
     Worker producer1;
-    producer1.SetTask(push_task, 100);
+    producer1.SetTask(push_task, 1);
 
-    uint64_t pool_size = 1;
-    std::vector<Worker> worker_pool(pool_size);
+    // uint64_t pool_size = 1;
+    // std::vector<Worker> worker_pool(pool_size);
 
-    for (uint64_t i{0}; i < pool_size; ++i) {
-        Worker consumer;
-        consumer.SetTask(pop_task, 1);
-        // worker_pool.push_back(consumer);
-    }
+    // for (uint64_t i{0}; i < pool_size; ++i) {
+    //     Worker consumer;
+    //     consumer.SetTask(pop_task, 1);
+    //     // worker_pool.push_back(consumer);
+    // }
     
-    producer1.DoTask();
+    // producer1.DoTask();
 
     // for (uint64_t i{0}; i < pool_size; ++i) {
     //     worker_pool[i].DoTask();
@@ -75,13 +87,50 @@ void test_Worker() {
 
 }
 
+// void test() {
+        
+//     LockFreeMPMCQueue<int> queue(1024); // Power-of-2 capacity
+
+//     // Producer thread
+//     auto producer = [&] {
+//         for (int i = 0; i < 100; ++i) {
+//             while (!queue.try_push(i)) {
+//                 std::cout << "pushing " << i << std::endl; 
+//                 std::this_thread::yield(); // Or use blocking wrapper
+//             }
+//         }
+//     };
+//     // Consumer thread
+//     auto consumer = [&] {
+//         int value;
+//         for (int i = 0; i < 100; ++i) {
+//             while (!queue.try_pop(value)) {
+//                 std::cout << "poping " << i << std::endl;
+//                 std::this_thread::yield();
+//             }
+//             // Process value
+//         }
+//     };
+//     // Run 4 producers and 4 consumers
+//     std::vector<std::thread> prods, cons;
+//     for (int i = 0; i < 1; ++i) {
+//         prods.emplace_back(producer);
+//         cons.emplace_back(consumer);
+//     }
+//     for (auto& t : prods) t.join();
+//     for (auto& t : cons) t.join();
+// }
 }
 
-int main(int argv, char* argc[]) {
+
+// int main(int argv, char* argc[]) {
+int main() {
 
     auto startTime = std::chrono::high_resolution_clock::now();
 
     ts_queue::test_Worker();
+
+    // ts_queue::test_task();
 
     auto endTime = std::chrono::high_resolution_clock::now();
     auto elapsedTime = std::chrono::duration_cast<std::chrono::seconds>(endTime - startTime).count();
